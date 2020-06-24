@@ -1,10 +1,13 @@
 # vlookup - program performs lookup in the same manner as Excel formula 'VLOOKUP' does.
 # Working range consists of 3 columns - key, English value and Russian value.
 
-import fnmatch, os, pandas as pd
+import requests, fnmatch, os, pandas as pd
 from pprint import pprint
+from shareplum import Site
+from requests_ntlm import HttpNtlmAuth
 from tkinter.filedialog import askopenfilename
 
+# myFile = 'Z:\\Finance\\Business Controls\\G&A control\\2020\\Forecast 2 2020\\Excel templates\\G&A_planning_template_FCST2_2020_mapping updates.xlsm'
 myFile = os.path.abspath(askopenfilename()) # Selected by user from browser
 
 def get_lookup_area(excelFile):
@@ -51,16 +54,42 @@ def get_rcc_instructions(excelFile):
         n +=1
     return(rccDictEng, rccDictRus)
 
+def get_sp_list(listName):
+    domain = os.environ.get('USERDOMAIN')
+    user = os.environ.get('USERNAME')
+    password = os.environ.get('PASSWORD')
+    auth = HttpNtlmAuth(f'{domain}\\{user}', password)
+
+    site = Site('https://data.erg.net/', auth=auth)
+    sp_list = site.List(listName)
+
+    list_data = sp_list.GetListItems()
+    spRccEng = {}
+    spRccRus = {}
+    n = 0
+    for rcc in list_data:
+        if list_data[n]['Active/Inactive'] == 'Inactive':
+            n += 1
+        else:
+            if list_data[n].get('RCC code') is None:
+                n += 1
+            else:
+                spRccEng[list_data[n]['RCC code']] = list_data[n]['HFM RCC name']
+                spRccRus[list_data[n]['RCC code']] = list_data[n]['Наименование ЦЗО']
+                n += 1
+
+    return(spRccEng, spRccRus)
+
 correctNamesEng = get_rcc_instructions(myFile)[0]
 correctNamesRus = get_rcc_instructions(myFile)[1]
 
-toCheckEng = get_lookup_area(myFile)[0]
-toChecRus = get_lookup_area(myFile)[1]
+toCheckEng = get_sp_list('RCCs')[0]
+toChecRus = get_sp_list('RCCs')[1]
 
 open('P:\\Documents Svetlana\\Python\\result.txt', 'w').close() # Clean result of previous run
 f = open('P:\\Documents Svetlana\\Python\\result.txt', 'w')
 for key in correctNamesEng:
-    if correctNamesEng[key] != toCheckEng[key]:
-        print(key + ': "' + toCheckEng[key] + '" to be updated to: "' + correctNamesEng[key] + '"', file=f)
-    if correctNamesRus[key] != toChecRus[key]:
-        print(key + ': "' + toChecRus[key] + '" to be updated to: "' + correctNamesRus[key] + '"', file=f)
+    if correctNamesEng[key] != toCheckEng.get(key):
+        print(key + ': "' + str(toCheckEng.get(key)) + '" to be updated to: "' + correctNamesEng[key] + '"', file=f)
+    if correctNamesRus[key] != toChecRus.get(key):
+        print(key + ': "' + str(toChecRus.get(key)) + '" to be updated to: "' + correctNamesRus[key] + '"', file=f)
